@@ -2,7 +2,7 @@
 
 Gym is an open source Python library for developing and comparing reinforcement learning algorithms by providing a standard API to communicate between learning algorithms and environments, as well as a standard set of environments compliant with that API. Since its release, Gym's API has become the field standard for doing this.
 
-Gym currently has two pieces of documentation: the [documentation website](http://gym.openai.com) and the [FAQ](https://github.com/openai/gym/wiki/FAQ).
+Gym documentation website is at [https://www.gymlibrary.ml/](https://www.gymlibrary.ml/), and you can propose fixes and changes [here](https://github.com/Farama-Foundation/gym-docs).
 
 ## Installation
 
@@ -33,6 +33,7 @@ for episode in range(10):
 * [Stable Baselines 3](https://github.com/DLR-RM/stable-baselines3) is a learning library based on the Gym API. It is our recommendation for beginners who want to start learning things quickly.
 * [RL Baselines3 Zoo](https://github.com/DLR-RM/rl-baselines3-zoo) builds upon SB3, containing optimal hyperparameters for Gym environments as well as code to easily find new ones. Such tuning is almost always required.
 * The [Autonomous Learning Library](https://github.com/cpnota/autonomous-learning-library) and [Tianshou](https://github.com/thu-ml/tianshou) are two reinforcement learning libraries I like that are generally geared towards more experienced users.
+* [RLlib](https://docs.ray.io/en/latest/rllib/index.html) is a commonly used library that allows for distributed training and inferencing.
 * [PettingZoo](https://github.com/Farama-Foundation/PettingZoo) is like Gym, but for environments with multiple agents.
 
 ## Environment Versioning

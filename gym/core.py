@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TypeVar, Generic, Tuple
-from typing import Optional
+from typing import TypeVar, Generic, Tuple, Union, Optional, SupportsFloat
 
 import gym
-from gym import error, spaces
-
-from gym.utils import closer, seeding
+from gym import spaces
+from gym.utils import seeding
 from gym.logger import deprecation
+from gym.utils.seeding import RandomNumberGenerator
 
 ObsType = TypeVar("ObsType")
 ActType = TypeVar("ActType")
@@ -48,7 +47,18 @@ class Env(Generic[ObsType, ActType]):
     observation_space: spaces.Space[ObsType]
 
     # Created
-    np_random = None
+    _np_random: RandomNumberGenerator | None = None
+
+    @property
+    def np_random(self) -> RandomNumberGenerator:
+        """Initializes the np_random field if not done already."""
+        if self._np_random is None:
+            self._np_random, seed = seeding.np_random()
+        return self._np_random
+
+    @np_random.setter
+    def np_random(self, value: RandomNumberGenerator):
+        self._np_random = value
 
     @abstractmethod
     def step(self, action: ActType) -> Tuple[ObsType, float, bool, dict]:
@@ -65,37 +75,44 @@ class Env(Generic[ObsType, ActType]):
             observation (object): agent's observation of the current environment
             reward (float) : amount of reward returned after previous action
             done (bool): whether the episode has ended, in which case further step() calls will return undefined results
-            info (dict): contains auxiliary diagnostic information (helpful for debugging, and sometimes learning)
+            info (dict): contains auxiliary diagnostic information (helpful for debugging, logging, and sometimes learning)
         """
         raise NotImplementedError
 
     @abstractmethod
     def reset(
-        self, *, seed: Optional[int] = None, options: Optional[dict] = None
-    ) -> ObsType:
+        self,
+        *,
+        seed: Optional[int] = None,
+        return_info: bool = False,
+        options: Optional[dict] = None,
+    ) -> Union[ObsType, tuple[ObsType, dict]]:
         """Resets the environment to an initial state and returns an initial
         observation.
 
-        Note that this function should not reset the environment's random
-        number generator(s); random variables in the environment's state should
-        be sampled independently between multiple calls to `reset()`. In other
-        words, each call of `reset()` should yield an environment suitable for
-        a new episode, independent of previous episodes.
+        This method should also reset the environment's random number
+        generator(s) if `seed` is an integer or if the environment has not
+        yet initialized a random number generator. If the environment already
+        has a random number generator and `reset` is called with `seed=None`,
+        the RNG should not be reset.
+        Moreover, `reset` should (in the typical use case) be called with an
+        integer seed right after initialization and then never again.
 
         Returns:
             observation (object): the initial observation.
+            info (optional dictionary): a dictionary containing extra information, this is only returned if return_info is set to true
         """
-        # Initialize the RNG if it's the first reset, or if the seed is manually passed
-        if seed is not None or self.np_random is None:
-            self.np_random, seed = seeding.np_random(seed)
+        # Initialize the RNG if the seed is manually passed
+        if seed is not None:
+            self._np_random, seed = seeding.np_random(seed)
 
     @abstractmethod
     def render(self, mode="human"):
         """Renders the environment.
 
         The set of supported modes varies per environment. (And some
-        environments do not support rendering at all.) By convention,
-        if mode is:
+        third-party environments may not support rendering at all.)
+        By convention, if mode is:
 
         - human: render to the current display or terminal and
           return nothing. Usually for human consumption.
@@ -156,7 +173,7 @@ class Env(Generic[ObsType, ActType]):
             "Function `env.seed(seed)` is marked as deprecated and will be removed in the future. "
             "Please use `env.reset(seed=seed) instead."
         )
-        self.np_random, seed = seeding.np_random(seed)
+        self._np_random, seed = seeding.np_random(seed)
         return [seed]
 
     @property
@@ -185,7 +202,7 @@ class Env(Generic[ObsType, ActType]):
         return False
 
 
-class Wrapper(Env):
+class Wrapper(Env[ObsType, ActType]):
     """Wraps the environment to allow a modular transformation.
 
     This class is the base class for all wrappers. The subclass could override
@@ -198,13 +215,13 @@ class Wrapper(Env):
 
     """
 
-    def __init__(self, env):
+    def __init__(self, env: Env):
         self.env = env
 
-        self._action_space = None
-        self._observation_space = None
-        self._reward_range = None
-        self._metadata = None
+        self._action_space: spaces.Space | None = None
+        self._observation_space: spaces.Space | None = None
+        self._reward_range: tuple[SupportsFloat, SupportsFloat] | None = None
+        self._metadata: dict | None = None
 
     def __getattr__(self, name):
         if name.startswith("_"):
@@ -220,7 +237,7 @@ class Wrapper(Env):
         return cls.__name__
 
     @property
-    def action_space(self):
+    def action_space(self) -> spaces.Space[ActType]:
         if self._action_space is None:
             return self.env.action_space
         return self._action_space
@@ -230,7 +247,7 @@ class Wrapper(Env):
         self._action_space = space
 
     @property
-    def observation_space(self):
+    def observation_space(self) -> spaces.Space:
         if self._observation_space is None:
             return self.env.observation_space
         return self._observation_space
@@ -240,7 +257,7 @@ class Wrapper(Env):
         self._observation_space = space
 
     @property
-    def reward_range(self):
+    def reward_range(self) -> tuple[SupportsFloat, SupportsFloat]:
         if self._reward_range is None:
             return self.env.reward_range
         return self._reward_range
@@ -250,7 +267,7 @@ class Wrapper(Env):
         self._reward_range = value
 
     @property
-    def metadata(self):
+    def metadata(self) -> dict:
         if self._metadata is None:
             return self.env.metadata
         return self._metadata
@@ -259,10 +276,10 @@ class Wrapper(Env):
     def metadata(self, value):
         self._metadata = value
 
-    def step(self, action):
+    def step(self, action: ActType) -> Tuple[ObsType, float, bool, dict]:
         return self.env.step(action)
 
-    def reset(self, **kwargs):
+    def reset(self, **kwargs) -> Union[ObsType, tuple[ObsType, dict]]:
         return self.env.reset(**kwargs)
 
     def render(self, mode="human", **kwargs):
@@ -274,9 +291,6 @@ class Wrapper(Env):
     def seed(self, seed=None):
         return self.env.seed(seed)
 
-    def compute_reward(self, achieved_goal, desired_goal, info):
-        return self.env.compute_reward(achieved_goal, desired_goal, info)
-
     def __str__(self):
         return f"<{type(self).__name__}{self.env}>"
 
@@ -284,14 +298,17 @@ class Wrapper(Env):
         return str(self)
 
     @property
-    def unwrapped(self):
+    def unwrapped(self) -> Env:
         return self.env.unwrapped
 
 
 class ObservationWrapper(Wrapper):
     def reset(self, **kwargs):
-        observation = self.env.reset(**kwargs)
-        return self.observation(observation)
+        if kwargs.get("return_info", False):
+            obs, info = self.env.reset(**kwargs)
+            return self.observation(obs), info
+        else:
+            return self.observation(self.env.reset(**kwargs))
 
     def step(self, action):
         observation, reward, done, info = self.env.step(action)

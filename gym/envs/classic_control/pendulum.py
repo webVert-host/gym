@@ -1,17 +1,20 @@
 __credits__ = ["Carlos Luis"]
 
 from typing import Optional
+from os import path
+
+import numpy as np
+import pygame
+from pygame import gfxdraw
 
 import gym
 from gym import spaces
 from gym.utils import seeding
-import numpy as np
-from os import path
 
 
 class PendulumEnv(gym.Env):
     """
-    ## Description
+    ### Description
 
     The inverted pendulum swingup problem is a classic problem in the control literature. In this
     version of the problem, the pendulum starts in a random position, and the goal is to swing it up so
@@ -26,7 +29,7 @@ class PendulumEnv(gym.Env):
     - `theta`: angle in radians.
     - `tau`: torque in `N * m`. Defined as positive _counter-clockwise_.
 
-    ## Action Space
+    ### Action Space
     The action is the torque applied to the pendulum.
 
     | Num | Action | Min  | Max |
@@ -34,7 +37,7 @@ class PendulumEnv(gym.Env):
     | 0   | Torque | -2.0 | 2.0 |
 
 
-    ## Observation Space
+    ### Observation Space
     The observations correspond to the x-y coordinate of the pendulum's end, and its angular velocity.
 
     | Num | Observation      | Min  | Max |
@@ -43,7 +46,7 @@ class PendulumEnv(gym.Env):
     | 1   | y = sin(angle)   | -1.0 | 1.0 |
     | 2   | Angular Velocity | -8.0 | 8.0 |
 
-    ## Rewards
+    ### Rewards
     The reward is defined as:
     ```
     r = -(theta^2 + 0.1*theta_dt^2 + 0.001*torque^2)
@@ -53,21 +56,21 @@ class PendulumEnv(gym.Env):
     0.001*2^2) = -16.2736044`, while the maximum reward is zero (pendulum is
     upright with zero velocity and no torque being applied).
 
-    ## Starting State
+    ### Starting State
     The starting state is a random angle in `[-pi, pi]` and a random angular velocity in `[-1,1]`.
 
-    ## Episode Termination
+    ### Episode Termination
     An episode terminates after 200 steps. There's no other criteria for termination.
 
-    ## Arguments
+    ### Arguments
     - `g`: acceleration of gravity measured in `(m/s^2)` used to calculate the pendulum dynamics. The default is
     `g=10.0`.
 
     ```
-    gym.make('CartPole-v1', g=9.81)
+    gym.make('Pendulum-v1', g=9.81)
     ```
 
-    ## Version History
+    ### Version History
 
     * v1: Simplify the math equations, no difference in behavior.
     * v0: Initial versions release (1.0.0)
@@ -82,7 +85,10 @@ class PendulumEnv(gym.Env):
         self.g = g
         self.m = 1.0
         self.l = 1.0
-        self.viewer = None
+        self.screen = None
+        self.isopen = True
+
+        self.screen_dim = 500
 
         high = np.array([1.0, 1.0, self.max_speed], dtype=np.float32)
         self.action_space = spaces.Box(
@@ -109,47 +115,100 @@ class PendulumEnv(gym.Env):
         self.state = np.array([newth, newthdot])
         return self._get_obs(), -costs, False, {}
 
-    def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
+    def reset(
+        self,
+        *,
+        seed: Optional[int] = None,
+        return_info: bool = False,
+        options: Optional[dict] = None
+    ):
         super().reset(seed=seed)
         high = np.array([np.pi, 1])
         self.state = self.np_random.uniform(low=-high, high=high)
         self.last_u = None
-        return self._get_obs()
+        if not return_info:
+            return self._get_obs()
+        else:
+            return self._get_obs(), {}
 
     def _get_obs(self):
         theta, thetadot = self.state
         return np.array([np.cos(theta), np.sin(theta), thetadot], dtype=np.float32)
 
     def render(self, mode="human"):
-        if self.viewer is None:
-            from gym.utils import pyglet_rendering
+        if self.screen is None:
+            pygame.init()
+            self.screen = pygame.display.set_mode((self.screen_dim, self.screen_dim))
+        self.surf = pygame.Surface((self.screen_dim, self.screen_dim))
+        self.surf.fill((255, 255, 255))
 
-            self.viewer = pyglet_rendering.Viewer(500, 500)
-            self.viewer.set_bounds(-2.2, 2.2, -2.2, 2.2)
-            rod = pyglet_rendering.make_capsule(1, 0.2)
-            rod.set_color(0.8, 0.3, 0.3)
-            self.pole_transform = pyglet_rendering.Transform()
-            rod.add_attr(self.pole_transform)
-            self.viewer.add_geom(rod)
-            axle = pyglet_rendering.make_circle(0.05)
-            axle.set_color(0, 0, 0)
-            self.viewer.add_geom(axle)
-            fname = path.join(path.dirname(__file__), "assets/clockwise.png")
-            self.img = pyglet_rendering.Image(fname, 1.0, 1.0)
-            self.imgtrans = pyglet_rendering.Transform()
-            self.img.add_attr(self.imgtrans)
+        bound = 2.2
+        scale = self.screen_dim / (bound * 2)
+        offset = self.screen_dim // 2
 
-        self.viewer.add_onetime(self.img)
-        self.pole_transform.set_rotation(self.state[0] + np.pi / 2)
+        rod_length = 1 * scale
+        rod_width = 0.2 * scale
+        l, r, t, b = 0, rod_length, rod_width / 2, -rod_width / 2
+        coords = [(l, b), (l, t), (r, t), (r, b)]
+        transformed_coords = []
+        for c in coords:
+            c = pygame.math.Vector2(c).rotate_rad(self.state[0] + np.pi / 2)
+            c = (c[0] + offset, c[1] + offset)
+            transformed_coords.append(c)
+        gfxdraw.aapolygon(self.surf, transformed_coords, (204, 77, 77))
+        gfxdraw.filled_polygon(self.surf, transformed_coords, (204, 77, 77))
+
+        gfxdraw.aacircle(self.surf, offset, offset, int(rod_width / 2), (204, 77, 77))
+        gfxdraw.filled_circle(
+            self.surf, offset, offset, int(rod_width / 2), (204, 77, 77)
+        )
+
+        rod_end = (rod_length, 0)
+        rod_end = pygame.math.Vector2(rod_end).rotate_rad(self.state[0] + np.pi / 2)
+        rod_end = (int(rod_end[0] + offset), int(rod_end[1] + offset))
+        gfxdraw.aacircle(
+            self.surf, rod_end[0], rod_end[1], int(rod_width / 2), (204, 77, 77)
+        )
+        gfxdraw.filled_circle(
+            self.surf, rod_end[0], rod_end[1], int(rod_width / 2), (204, 77, 77)
+        )
+
+        fname = path.join(path.dirname(__file__), "assets/clockwise.png")
+        img = pygame.image.load(fname)
         if self.last_u is not None:
-            self.imgtrans.scale = (-self.last_u / 2, np.abs(self.last_u) / 2)
+            scale_img = pygame.transform.smoothscale(
+                img, (scale * np.abs(self.last_u) / 2, scale * np.abs(self.last_u) / 2)
+            )
+            is_flip = self.last_u > 0
+            scale_img = pygame.transform.flip(scale_img, is_flip, True)
+            self.surf.blit(
+                scale_img,
+                (
+                    offset - scale_img.get_rect().centerx,
+                    offset - scale_img.get_rect().centery,
+                ),
+            )
 
-        return self.viewer.render(return_rgb_array=mode == "rgb_array")
+        # drawing axle
+        gfxdraw.aacircle(self.surf, offset, offset, int(0.05 * scale), (0, 0, 0))
+        gfxdraw.filled_circle(self.surf, offset, offset, int(0.05 * scale), (0, 0, 0))
+
+        self.surf = pygame.transform.flip(self.surf, False, True)
+        self.screen.blit(self.surf, (0, 0))
+        if mode == "human":
+            pygame.display.flip()
+
+        if mode == "rgb_array":
+            return np.transpose(
+                np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
+            )
+        else:
+            return self.isopen
 
     def close(self):
-        if self.viewer:
-            self.viewer.close()
-            self.viewer = None
+        if self.screen is not None:
+            pygame.quit()
+            self.isopen = False
 
 
 def angle_normalize(x):
