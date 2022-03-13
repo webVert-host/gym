@@ -142,11 +142,12 @@ class LunarLander(gym.Env, EzPickle):
     Created by Oleg Klimov
     """
 
-    metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": FPS}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": FPS}
 
     def __init__(self, continuous: bool = False):
         EzPickle.__init__(self)
         self.screen = None
+        self.clock = None
         self.isopen = True
         self.world = Box2D.b2World()
         self.moon = None
@@ -446,7 +447,10 @@ class LunarLander(gym.Env, EzPickle):
     def render(self, mode="human"):
         if self.screen is None:
             pygame.init()
+            pygame.display.init()
             self.screen = pygame.display.set_mode((VIEWPORT_W, VIEWPORT_H))
+        if self.clock is None:
+            self.clock = pygame.time.Clock()
 
         self.surf = pygame.Surface(self.screen.get_size())
 
@@ -530,6 +534,8 @@ class LunarLander(gym.Env, EzPickle):
         self.screen.blit(self.surf, (0, 0))
 
         if mode == "human":
+            pygame.event.pump()
+            self.clock.tick(self.metadata["render_fps"])
             pygame.display.flip()
 
         if mode == "rgb_array":
@@ -541,6 +547,7 @@ class LunarLander(gym.Env, EzPickle):
 
     def close(self):
         if self.screen is not None:
+            pygame.display.quit()
             pygame.quit()
             self.isopen = False
 

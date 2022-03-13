@@ -105,7 +105,7 @@ class BlackjackEnv(gym.Env):
     * v0: Initial versions release (1.0.0)
     """
 
-    metadata = {"render.modes": ["human", "rgb_array"]}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
     def __init__(self, natural=False, sab=False):
         self.action_space = spaces.Discrete(2)
@@ -178,10 +178,14 @@ class BlackjackEnv(gym.Env):
         if not hasattr(self, "screen"):
             if mode == "human":
                 pygame.init()
+                pygame.display.init()
                 self.screen = pygame.display.set_mode((screen_width, screen_height))
             else:
                 pygame.font.init()
                 self.screen = pygame.Surface((screen_width, screen_height))
+
+        if not hasattr(self, "clock"):
+            self.clock = pygame.time.Clock()
 
         self.screen.fill(bg_color)
 
@@ -263,7 +267,9 @@ class BlackjackEnv(gym.Env):
                 ),
             )
         if mode == "human":
+            pygame.event.pump()
             pygame.display.update()
+            self.clock.tick(self.metadata["render_fps"])
         else:
             return np.transpose(
                 np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
