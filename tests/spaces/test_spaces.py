@@ -1,12 +1,12 @@
-import json  # note: ujson fails this test due to float equality
 import copy
+import json  # note: ujson fails this test due to float equality
 import pickle
 import tempfile
 
 import numpy as np
 import pytest
 
-from gym.spaces import Tuple, Box, Discrete, MultiDiscrete, MultiBinary, Dict
+from gym.spaces import Box, Dict, Discrete, MultiBinary, MultiDiscrete, Tuple
 
 
 @pytest.mark.parametrize(
@@ -569,20 +569,20 @@ def test_infinite_space(space):
     # but floats are unbounded for infinite
     if np.any(space.high != 0):
         assert (
-            space.is_bounded("above") == False
+            space.is_bounded("above") is False
         ), "inf upper bound supposed to be unbounded"
     else:
         assert (
-            space.is_bounded("above") == True
+            space.is_bounded("above") is True
         ), "non-inf upper bound supposed to be bounded"
 
     if np.any(space.low != 0):
         assert (
-            space.is_bounded("below") == False
+            space.is_bounded("below") is False
         ), "inf lower bound supposed to be unbounded"
     else:
         assert (
-            space.is_bounded("below") == True
+            space.is_bounded("below") is True
         ), "non-inf lower bound supposed to be bounded"
 
     # check for dtype
@@ -608,6 +608,28 @@ def test_discrete_legacy_state_pickling():
 
     assert d.start == 0
     assert d.n == 3
+
+
+def test_box_legacy_state_pickling():
+    legacy_state = {
+        "dtype": np.dtype("float32"),
+        "_shape": (5,),
+        "low": np.array([0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32),
+        "high": np.array([1.0, 1.0, 1.0, 1.0, 1.0], dtype=np.float32),
+        "bounded_below": np.array([True, True, True, True, True]),
+        "bounded_above": np.array([True, True, True, True, True]),
+        "_np_random": None,
+    }
+
+    b = Box(-1, 1, ())
+    assert "low_repr" in b.__dict__ and "high_repr" in b.__dict__
+    del b.__dict__["low_repr"]
+    del b.__dict__["high_repr"]
+    assert "low_repr" not in b.__dict__ and "high_repr" not in b.__dict__
+
+    b.__setstate__(legacy_state)
+    assert b.low_repr == "0.0"
+    assert b.high_repr == "1.0"
 
 
 @pytest.mark.parametrize(
