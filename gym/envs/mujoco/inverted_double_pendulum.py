@@ -2,17 +2,38 @@ import numpy as np
 
 from gym import utils
 from gym.envs.mujoco import mujoco_env
+from gym.spaces import Box
 
 
 class InvertedDoublePendulumEnv(mujoco_env.MujocoEnv, utils.EzPickle):
-    def __init__(self):
+    metadata = {
+        "render_modes": [
+            "human",
+            "rgb_array",
+            "depth_array",
+            "single_rgb_array",
+            "single_depth_array",
+        ],
+        "render_fps": 20,
+    }
+
+    def __init__(self, **kwargs):
+        observation_space = Box(low=-np.inf, high=np.inf, shape=(11,), dtype=np.float64)
         mujoco_env.MujocoEnv.__init__(
-            self, "inverted_double_pendulum.xml", 5, mujoco_bindings="mujoco_py"
+            self,
+            "inverted_double_pendulum.xml",
+            5,
+            mujoco_bindings="mujoco_py",
+            observation_space=observation_space,
+            **kwargs
         )
         utils.EzPickle.__init__(self)
 
     def step(self, action):
         self.do_simulation(action, self.frame_skip)
+
+        self.renderer.render_step()
+
         ob = self._get_obs()
         x, _, y = self.sim.data.site_xpos[0]
         dist_penalty = 0.01 * x**2 + (y - 2) ** 2

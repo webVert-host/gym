@@ -4,6 +4,7 @@ import numpy as np
 
 from gym import utils
 from gym.envs.mujoco import mujoco_env
+from gym.spaces import Box
 
 DEFAULT_CAMERA_CONFIG = {
     "trackbodyid": 2,
@@ -14,6 +15,17 @@ DEFAULT_CAMERA_CONFIG = {
 
 
 class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
+    metadata = {
+        "render_modes": [
+            "human",
+            "rgb_array",
+            "depth_array",
+            "single_rgb_array",
+            "single_depth_array",
+        ],
+        "render_fps": 125,
+    }
+
     def __init__(
         self,
         xml_file="hopper.xml",
@@ -26,6 +38,7 @@ class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         healthy_angle_range=(-0.2, 0.2),
         reset_noise_scale=5e-3,
         exclude_current_positions_from_observation=True,
+        **kwargs
     ):
         utils.EzPickle.__init__(**locals())
 
@@ -46,7 +59,23 @@ class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             exclude_current_positions_from_observation
         )
 
-        mujoco_env.MujocoEnv.__init__(self, xml_file, 4, mujoco_bindings="mujoco_py")
+        if exclude_current_positions_from_observation:
+            observation_space = Box(
+                low=-np.inf, high=np.inf, shape=(11,), dtype=np.float64
+            )
+        else:
+            observation_space = Box(
+                low=-np.inf, high=np.inf, shape=(12,), dtype=np.float64
+            )
+
+        mujoco_env.MujocoEnv.__init__(
+            self,
+            xml_file,
+            4,
+            mujoco_bindings="mujoco_py",
+            observation_space=observation_space,
+            **kwargs
+        )
 
     @property
     def healthy_reward(self):
@@ -104,6 +133,8 @@ class HopperEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
         rewards = forward_reward + healthy_reward
         costs = ctrl_cost
+
+        self.renderer.render_step()
 
         observation = self._get_obs()
         reward = rewards - costs

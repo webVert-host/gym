@@ -2,18 +2,39 @@ import numpy as np
 
 from gym import utils
 from gym.envs.mujoco import mujoco_env
+from gym.spaces import Box
 
 
 class InvertedPendulumEnv(mujoco_env.MujocoEnv, utils.EzPickle):
-    def __init__(self):
+    metadata = {
+        "render_modes": [
+            "human",
+            "rgb_array",
+            "depth_array",
+            "single_rgb_array",
+            "single_depth_array",
+        ],
+        "render_fps": 25,
+    }
+
+    def __init__(self, **kwargs):
         utils.EzPickle.__init__(self)
+        observation_space = Box(low=-np.inf, high=np.inf, shape=(4,), dtype=np.float64)
         mujoco_env.MujocoEnv.__init__(
-            self, "inverted_pendulum.xml", 2, mujoco_bindings="mujoco_py"
+            self,
+            "inverted_pendulum.xml",
+            2,
+            mujoco_bindings="mujoco_py",
+            observation_space=observation_space,
+            **kwargs
         )
 
     def step(self, a):
         reward = 1.0
         self.do_simulation(a, self.frame_skip)
+
+        self.renderer.render_step()
+
         ob = self._get_obs()
         notdone = np.isfinite(ob).all() and (np.abs(ob[1]) <= 0.2)
         done = not notdone

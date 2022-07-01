@@ -2,6 +2,7 @@ import numpy as np
 
 from gym import utils
 from gym.envs.mujoco import mujoco_env
+from gym.spaces import Box
 
 
 def mass_center(model, sim):
@@ -11,9 +12,28 @@ def mass_center(model, sim):
 
 
 class HumanoidEnv(mujoco_env.MujocoEnv, utils.EzPickle):
-    def __init__(self):
+    metadata = {
+        "render_modes": [
+            "human",
+            "rgb_array",
+            "depth_array",
+            "single_rgb_array",
+            "single_depth_array",
+        ],
+        "render_fps": 67,
+    }
+
+    def __init__(self, **kwargs):
+        observation_space = Box(
+            low=-np.inf, high=np.inf, shape=(376,), dtype=np.float64
+        )
         mujoco_env.MujocoEnv.__init__(
-            self, "humanoid.xml", 5, mujoco_bindings="mujoco_py"
+            self,
+            "humanoid.xml",
+            5,
+            mujoco_bindings="mujoco_py",
+            observation_space=observation_space,
+            **kwargs
         )
         utils.EzPickle.__init__(self)
 
@@ -34,6 +54,9 @@ class HumanoidEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         pos_before = mass_center(self.model, self.sim)
         self.do_simulation(a, self.frame_skip)
         pos_after = mass_center(self.model, self.sim)
+
+        self.renderer.render_step()
+
         alive_bonus = 5.0
         data = self.sim.data
         lin_vel_cost = 1.25 * (pos_after - pos_before) / self.dt
